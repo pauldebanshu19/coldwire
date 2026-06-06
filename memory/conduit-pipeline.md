@@ -10,10 +10,19 @@ domain → Ocean.io lookalikes → Prospeo decision-makers → email reveal → 
 gate → Brevo send. Repo `coldwire/`; `PRD.md` is the full plan; build lives in
 `backend/`.
 
-**Phase 1 (gradeable core + CLI) is DONE & validated live** (stripe.com →
-razorpay/cashfree → real C-suite → revealed emails → gate). Pure engine in
-`backend/core/`, demo CLI `backend/cli.py`, 16 passing tests. Next phases (FastAPI
-+ Postgres + Celery, Next.js frontend, hardening, scale) not started.
+**Phase 1 (engine + CLI) DONE & validated live** (stripe.com → razorpay/cashfree
+→ real C-suite → revealed emails → gate). Pure engine `backend/core/`, CLI
+`backend/cli.py`.
+
+**Phase 2 (FastAPI + Postgres + Celery/Redis) DONE & validated on Docker stack**
+(Celery worker processed job cross-process, SSE via Redis Streams, 15 SENT rows
+in Postgres). `backend/api/` (JWT auth, jobs, SSE), `backend/db/` (async
+SQLAlchemy), `backend/workers/` (celery), `docker-compose.yml`. Key design:
+all-async DB; `REDIS_URL` set → Celery + RedisStreamBus, unset → in-process
+asyncio + MemoryBus (zero-infra local). `NullPool` required (asyncpg + per-task
+event loops). Engine reused untouched; pipeline split across the gate (run_job
+stages 1-3, run_send stage 4). 20 tests pass. Next: Phase 3 Next.js frontend,
+Phase 4 hardening, Phase 5 scale.
 
 Provider quirks that bit us (now handled in code):
 - **Prospeo** search returns **masked** emails (`revealed:false`); must call

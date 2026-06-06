@@ -1,0 +1,55 @@
+name: conduit
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: conduit
+      POSTGRES_PASSWORD: conduit
+      POSTGRES_DB: conduit
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U conduit"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  api:
+    build: .
+    env_file: .env                      # provider keys, sender, MOCK
+    environment:
+      DATABASE_URL: postgresql+asyncpg://conduit:conduit@db:5432/conduit
+      REDIS_URL: redis://redis:6379/0
+      MOCK: ${MOCK:-false}
+      AUTO_CREATE_TABLES: "true"
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-prod-32bytes-minimum-secret}
+      CORS_ORIGINS: ${CORS_ORIGINS:-*}
+    depends_on:
+      db: {condition: service_healthy}
+      redis: {condition: service_healthy}
+    ports:
+      - "8000:8000"
+
+  worker:
+    build: .
+    command: celery -A workers.celery_app worker --loglevel=info --concurrency=4
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://conduit:conduit@db:5432/conduit
+      REDIS_URL: redis://redis:6379/0
+      MOCK: ${MOCK:-false}
+    depends_on:
+      db: {condition: service_healthy}
+      redis: {condition: service_healthy}
+
+volumes:
+  pgdata:

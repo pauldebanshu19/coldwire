@@ -23,7 +23,7 @@ Celery layers (Phases 2–5 in `PRD.md`) call the exact same engine.
 ```bash
 cd backend
 uv venv .venv && . .venv/bin/activate      # or: python -m venv .venv
-uv pip install -r requirements-dev.txt     # or: pip install -r requirements-dev.txt
+uv pip install -r requirements.txt          # or: pip install -r requirements.txt
 cp .env.example .env                        # then fill in keys (a .env is already present)
 
 # Safe, zero-credit end-to-end run (fake providers):
@@ -45,6 +45,36 @@ python cli.py stripe.com
 | `--max-companies N` / `--max-contacts N` | cap the fan-out (saves credits) |
 | `--out results.csv` | export per-contact send status |
 | `--log-level DEBUG` | verbose logging |
+
+---
+
+## Run the backend (web API)
+
+`backend/main.py` exposes the FastAPI `app`.
+
+```bash
+cd backend
+source ~/python/bin/activate
+pip install -r requirements.txt
+python -m uvicorn main:app --host 127.0.0.1 --port 8000 --reload
+```
+
+Prepend `MOCK=true` for a zero-credit demo (fake providers, no real email):
+```bash
+MOCK=true python -m uvicorn main:app --host 127.0.0.1 --port 8000 --reload
+```
+
+Alternative entrypoint with the same result: `python main.py` (`--port`, `--reload` flags).
+
+No Postgres/Redis required — defaults to SQLite + in-process tasks.
+
+**Check it's running:**
+- `curl localhost:8000/health` → `{"status":"ok","queue":"in-process"}`
+- Open **http://localhost:8000/docs** (Swagger UI) to click-test every endpoint.
+
+**Stop it:** `Ctrl+C` (or `pkill -f main.py`).
+
+For the full Postgres + Redis + Celery stack, see [Phase 2](#phase-2--web-product-fastapi--postgres--celeryredis) below (`docker compose up --build`).
 
 ---
 
@@ -137,13 +167,79 @@ message IDs.)
 
 ---
 
+## Phase 2 — web product (FastAPI + Postgres + Celery/Redis)
+
+Same engine, now durable and queue-driven. Submit returns instantly with a
+`job_id`; a worker runs Stages 1–3, stops at the gate; the frontend streams
+progress over SSE; approval enqueues Stage 4.
+
+### Run it two ways
+
+**Zero-infra local** (SQLite + in-process tasks + in-memory event bus — no
+Postgres/Redis needed):
+```bash
+. .venv/bin/activate
+MOCK=true python main.py            # http://localhost:8000  (docs at /docs)
+```
+
+**Production stack** (Postgres + Redis + API + autoscalable Celery workers):
+```bash
+docker compose up --build            # add MOCK=true to demo without credits
+# API on :8000, worker consumes the queue, Postgres + Redis backing
+```
+The switch is automatic: set `REDIS_URL` → Celery + Redis Streams; unset →
+in-process. Same code path.
+
+### API (PRD §8)
+```
+POST /api/auth/register | /api/auth/login        -> { access_token }   (JWT bearer)
+POST /api/jobs            { seed_domain }         -> 202 { job_id }     (Idempotency-Key header)
+GET  /api/jobs                                    list caller's jobs
+GET  /api/jobs/{id}                               -> { status, stats, error }
+GET  /api/jobs/{id}/events?token=JWT              SSE stage-progress stream
+GET  /api/jobs/{id}/review                        -> summary + sample email (the gate)
+POST /api/jobs/{id}/approve                       fire Stage 4
+POST /api/jobs/{id}/cancel                        abort before send (0 emails)
+GET  /api/jobs/{id}/results                       -> per-contact sent/failed/skipped
+```
+
+### Phase-2 layer
+```
+app_settings.py     infra settings (DB/Redis/JWT) — kept out of the pure engine
+db/models.py        users · jobs · companies · contacts · emails · outreach (PRD §4)
+db/session.py       async SQLAlchemy 2.0 (asyncpg / aiosqlite), NullPool
+api/                main · routes_auth · routes_jobs · deps · security(JWT+bcrypt)
+api/service.py      persists each stage; splits the pipeline across the gate
+api/events.py       event bus: MemoryBus | RedisStreamBus + SSE
+api/dispatch.py     Celery .delay  ↔  in-process asyncio task
+workers/            celery_app · tasks (asyncio.run around the async service)
+docker-compose.yml  db · redis · api · worker     Dockerfile · .env(.example)
+```
+Tests (`tests/test_api.py`): full lifecycle (register → submit → gate → approve →
+COMPLETED), cancel blocks send, idempotent submit, auth required, no double-send.
+Validated live on the Docker stack: Celery worker processed the job cross-process,
+SSE streamed via Redis Streams, 15 `SENT` rows landed in Postgres.
+
+**Job lifecycle:** `QUEUED → SOURCING → PROSPECTING → RESOLVING →
+AWAITING_APPROVAL → SENDING → COMPLETED` (or `CANCELLED` / `FAILED`). The gate is
+its own status, so a worker restart mid-job never auto-sends. Idempotency:
+`(user, Idempotency-Key)` dedups submits; `outreach.idempotency_key =
+job:contact` makes a retried send a no-op.
+
+Production note: `AUTO_CREATE_TABLES=true` bootstraps the schema via
+`create_all` for the demo; swap in Alembic migrations for real deploys.
+
+---
+
 ## What's done vs next
 
-**Done (Phase 1):** the gradeable core + CLI, all four integrations, the
-approval gate, retries/rate-limit/cache/dedup/partial-failure handling,
-mock mode, tests. Validated live: `stripe.com → razorpay.com, cashfree.com →
-real decision-makers → revealed verified emails → gate`.
+**Phase 1 (engine + CLI):** all four integrations, approval gate,
+retries/rate-limit/cache/dedup/partial-failure, mock mode. Validated live:
+`stripe.com → razorpay/cashfree → real decision-makers → revealed emails → gate`.
 
-**Next (per `PRD.md`):** FastAPI + Postgres + Celery/Redis (Phase 2), Next.js
-frontend with SSE progress + web approval gate (Phase 3), global Redis
-rate-limit/circuit-breakers/DLQ (Phase 4), autoscaling + load test (Phase 5).
+**Phase 2 (web product):** FastAPI + Postgres + Celery/Redis, JWT auth, SSE
+progress, durable job state, idempotency, one-command docker-compose. ✅
+
+**Next (per `PRD.md`):** Next.js frontend (Phase 3), global Redis
+rate-limit/circuit-breakers/DLQ + per-tenant fairness (Phase 4), autoscaling +
+load test against mocked providers (Phase 5).
