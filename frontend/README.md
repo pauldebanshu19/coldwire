@@ -1,36 +1,61 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Conduit — frontend (Phase 3)
 
-## Getting Started
+Next.js 16 + React 19 + Tailwind v4 + shadcn UI. The web face of the cold-outreach
+pipeline: submit one domain, watch the pipeline run live, approve at the gate, see results.
 
-First, run the development server:
+## Prerequisites
 
+The backend API must be running (see `../backend`):
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+cd ../backend && . .venv/bin/activate && MOCK=true python main.py   # http://localhost:8000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Run
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+cd frontend
+bun install            # or: pnpm install / npm install
+bun run dev            # http://localhost:3000
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+`NEXT_PUBLIC_API_URL` (in `.env.local`) points at the backend — defaults to
+`http://localhost:8000`. Build for production: `bun run build && bun run start`.
 
-## Learn More
+## Screens (PRD §9)
 
-To learn more about Next.js, take a look at the following resources:
+1. **Landing / auth** (`/`) — register or sign in (JWT bearer, stored client-side).
+2. **Dashboard** (`/`) — the submit console (one domain → `RUN PIPELINE`) + run history.
+3. **Job / live progress** (`/jobs/[id]`) — the 4-stage pipeline lights up stage by
+   stage from the **SSE** stream (`EventSource` → `/api/jobs/{id}/events`), with a live
+   event feed. Status is also polled for authoritative state.
+4. **Approval gate** — at `AWAITING_APPROVAL`: summary tiles (companies / contacts /
+   deliverable / skipped), the rendered **sample email**, and `Approve & Send` / `Cancel`.
+5. **Results** — per-contact sent / failed / skipped, with **CSV export**.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Architecture
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```
+app/
+  layout.tsx            fonts (IBM Plex Mono + Hanken Grotesk), dark theme, Providers
+  page.tsx              landing/auth ↔ dashboard (client, auth-gated)
+  jobs/[id]/page.tsx    job detail: timeline + gate + results
+  globals.css           Tailwind v4 theme — "mission control" palette (lime on near-black)
+lib/
+  api.ts               typed backend client + token storage + types
+  auth.tsx             AuthProvider / useAuth (JWT in localStorage)
+  status.ts            stage + status metadata
+hooks/use-job-stream.ts SSE subscription + status polling
+components/
+  app-header · auth-form · submit-console · job-list
+  pipeline-timeline · review-gate · results-table · status-badge · providers
+```
 
-## Deploy on Vercel
+State is plain React + a small SSE/poll hook (no extra data layer). Auth is a JWT
+bearer token kept in `localStorage`; the SSE endpoint takes it as a `?token=` query
+param because `EventSource` can't set headers.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Design
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Dark terminal / mission-control aesthetic — signal-lime accent on near-black, IBM Plex
+Mono for data + labels, grid texture and a glow that reinforces the "engine" framing.
+The pipeline timeline is the centerpiece: nodes light up and count up as SSE events arrive.

@@ -21,8 +21,18 @@ SQLAlchemy), `backend/workers/` (celery), `docker-compose.yml`. Key design:
 all-async DB; `REDIS_URL` set → Celery + RedisStreamBus, unset → in-process
 asyncio + MemoryBus (zero-infra local). `NullPool` required (asyncpg + per-task
 event loops). Engine reused untouched; pipeline split across the gate (run_job
-stages 1-3, run_send stage 4). 20 tests pass. Next: Phase 3 Next.js frontend,
-Phase 4 hardening, Phase 5 scale.
+stages 1-3, run_send stage 4). 20 tests pass.
+
+**Phase 3 (Next.js frontend) DONE.** `frontend/` = Next.js 16 + React 19 + Tailwind
+v4 + shadcn (radix-nova), bun. Screens: landing/auth (JWT), dashboard (submit +
+history), job detail (live SSE pipeline timeline + approval gate + results + CSV).
+Client `NEXT_PUBLIC_API_URL`→backend; SSE via EventSource `?token=` (EventSource
+can't set headers). Dark "mission-control" theme (lime on near-black, IBM Plex Mono).
+`bun run build` green (deleted unused scaffold ui calendar/chart/carousel — broke vs
+react-day-picker v10 / recharts 3). CORS verified cross-origin :3000→:8000.
+Backend CORS fixed: never `*`+credentials; fail-closed when DEV_MODE=false.
+Single consolidated `backend/requirements.txt`. Run backend: `python main.py` or
+`uvicorn main:app`. Next: Phase 4 hardening, Phase 5 scale.
 
 Provider quirks that bit us (now handled in code):
 - **Prospeo** search returns **masked** emails (`revealed:false`); must call
