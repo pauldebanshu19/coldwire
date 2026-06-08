@@ -1,19 +1,31 @@
-// Typed client for the Conduit backend (FastAPI).
+// Typed client for the Coldwire backend (FastAPI).
+// Auth is handled by Supabase; a fresh (auto-refreshed) access token is pulled
+// from the Supabase client on every request so it never goes stale.
+
+import { supabase } from "./supabase";
 
 export const API_URL =
   process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") || "http://localhost:8000";
 
-const TOKEN_KEY = "conduit_token";
-
+// Cached for synchronous needs (the SSE URL); kept in sync by the AuthProvider.
+let _bearer: string | null = null;
+export function setBearer(token: string | null) {
+  _bearer = token;
+}
 export function getToken(): string | null {
-  if (typeof window === "undefined") return null;
-  return window.localStorage.getItem(TOKEN_KEY);
+  return _bearer;
 }
-export function setToken(token: string) {
-  window.localStorage.setItem(TOKEN_KEY, token);
-}
-export function clearToken() {
-  window.localStorage.removeItem(TOKEN_KEY);
+
+/** Current access token, refreshing it via Supabase if it's near/after expiry. */
+async function freshToken(): Promise<string | null> {
+  try {
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token ?? null;
+    if (token) _bearer = token;
+    return token ?? _bearer;
+  } catch {
+    return _bearer;
+  }
 }
 
 // ── Types (mirror api/schemas.py) ────────────────────────────────────
@@ -65,7 +77,7 @@ export interface Results {
 }
 
 export interface SseEvent {
-  stage: "ocean" | "prospeo" | "eazyreach" | "brevo" | "pipeline" | "heartbeat";
+  stage: "ocean" | "prospeo" | "resolve" | "brevo" | "pipeline" | "heartbeat";
   status: "start" | "progress" | "done" | "skip" | "error" | "ping";
   count: number;
   message?: string;
@@ -83,18 +95,18 @@ export class ApiError extends Error {
 }
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const token = getToken();
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     ...(init.headers as Record<string, string>),
   };
+  const token = await freshToken();
   if (token) headers["Authorization"] = `Bearer ${token}`;
 
   let res: Response;
   try {
     res = await fetch(`${API_URL}${path}`, { ...init, headers });
   } catch {
-    throw new ApiError("Cannot reach the backend. Is it running on " + API_URL + "?", 0);
+    throw new ApiError(`Cannot reach the backend at ${API_URL}. Is it running?`, 0);
   }
   if (!res.ok) {
     let detail = res.statusText;
@@ -111,15 +123,6 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 
 // ── Endpoints ────────────────────────────────────────────────────────
 export const api = {
-  register: (email: string, password: string) =>
-    request<{ access_token: string }>("/api/auth/register", {
-      method: "POST", body: JSON.stringify({ email, password }),
-    }),
-  login: (email: string, password: string) =>
-    request<{ access_token: string }>("/api/auth/login", {
-      method: "POST", body: JSON.stringify({ email, password }),
-    }),
-
   createJob: (seed_domain: string) =>
     request<Job>("/api/jobs", { method: "POST", body: JSON.stringify({ seed_domain }) }),
   listJobs: () => request<Job[]>("/api/jobs"),
@@ -128,6 +131,7 @@ export const api = {
   approve: (id: string) => request<Job>(`/api/jobs/${id}/approve`, { method: "POST" }),
   cancel: (id: string) => request<Job>(`/api/jobs/${id}/cancel`, { method: "POST" }),
   results: (id: string) => request<Results>(`/api/jobs/${id}/results`),
+  deleteJob: (id: string) => request<void>(`/api/jobs/${id}`, { method: "DELETE" }),
 
-  eventsUrl: (id: string) => `${API_URL}/api/jobs/${id}/events?token=${getToken() ?? ""}`,
+  eventsUrl: (id: string) => `${API_URL}/api/jobs/${id}/events?token=${_bearer ?? ""}`,
 };

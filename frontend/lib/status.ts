@@ -3,7 +3,7 @@ import type { JobStatus, JobStats } from "./api";
 export const STAGES = [
   { key: "ocean", n: "01", label: "Source", provider: "Ocean.io", out: "lookalike companies", stat: "companies", runAt: "SOURCING" },
   { key: "prospeo", n: "02", label: "Prospect", provider: "Prospeo", out: "decision-makers", stat: "contacts", runAt: "PROSPECTING" },
-  { key: "eazyreach", n: "03", label: "Resolve", provider: "Eazyreach", out: "verified emails", stat: "deliverable", runAt: "RESOLVING" },
+  { key: "resolve", n: "03", label: "Resolve", provider: "Prospeo", out: "verified emails", stat: "deliverable", runAt: "RESOLVING" },
   { key: "brevo", n: "04", label: "Send", provider: "Brevo", out: "outreach sent", stat: "sent", runAt: "SENDING" },
 ] as const;
 

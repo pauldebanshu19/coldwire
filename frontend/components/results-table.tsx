@@ -28,7 +28,7 @@ function exportCsv(rows: ResultRow[], seed: string) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `conduit-${seed}-results.csv`;
+  a.download = `coldwire-${seed}-results.csv`;
   a.click();
   URL.revokeObjectURL(url);
 }

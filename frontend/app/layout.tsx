@@ -15,7 +15,7 @@ const hanken = Hanken_Grotesk({
 });
 
 export const metadata: Metadata = {
-  title: "Conduit — cold-outreach pipeline",
+  title: "Coldwire — cold-outreach pipeline",
   description: "One seed domain in. Lookalikes, decision-makers, verified emails, outreach — zero humans in the loop.",
 };
 
@@ -25,6 +25,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
+      suppressHydrationWarning
       className={`dark ${plexMono.variable} ${hanken.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">

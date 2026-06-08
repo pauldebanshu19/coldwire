@@ -1,58 +1,73 @@
 "use client";
 
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
-import { api, clearToken, getToken, setToken } from "./api";
+import type { Session } from "@supabase/supabase-js";
+import { supabase } from "./supabase";
+import { setBearer } from "./api";
 
 interface AuthCtx {
   token: string | null;
   email: string | null;
   ready: boolean;
-  login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string) => Promise<void>;
-  logout: () => void;
+  signIn: (email: string, password: string) => Promise<void>;
+  /** returns true if a session was created immediately (no email confirmation) */
+  signUp: (email: string, password: string) => Promise<boolean>;
+  signInWithGoogle: () => Promise<void>;
+  signOut: () => Promise<void>;
 }
 
 const Ctx = createContext<AuthCtx | null>(null);
-const EMAIL_KEY = "conduit_email";
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [token, setTok] = useState<string | null>(null);
   const [email, setEmail] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
 
+  const apply = (session: Session | null) => {
+    const t = session?.access_token ?? null;
+    setBearer(t);
+    setTok(t);
+    setEmail(session?.user?.email ?? null);
+  };
+
   useEffect(() => {
-    const t = getToken();
-    if (t) {
-      setTok(t);
-      setEmail(window.localStorage.getItem(EMAIL_KEY));
-    }
-    setReady(true);
+    supabase.auth.getSession().then(({ data }) => {
+      apply(data.session);
+      setReady(true);
+    });
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => apply(session));
+    return () => sub.subscription.unsubscribe();
   }, []);
 
-  const finish = (t: string, em: string) => {
-    setToken(t);
-    window.localStorage.setItem(EMAIL_KEY, em);
-    setTok(t);
-    setEmail(em);
+  const signIn = async (em: string, pw: string) => {
+    const { error } = await supabase.auth.signInWithPassword({ email: em, password: pw });
+    if (error) throw new Error(error.message);
   };
 
-  const login = async (em: string, pw: string) => {
-    const { access_token } = await api.login(em, pw);
-    finish(access_token, em);
+  const signUp = async (em: string, pw: string) => {
+    const { data, error } = await supabase.auth.signUp({ email: em, password: pw });
+    if (error) throw new Error(error.message);
+    return data.session != null; // false => email confirmation required
   };
-  const register = async (em: string, pw: string) => {
-    const { access_token } = await api.register(em, pw);
-    finish(access_token, em);
+
+  const signInWithGoogle = async () => {
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: typeof window !== "undefined" ? window.location.origin : undefined,
+      },
+    });
+    if (error) throw new Error(error.message);
+    // browser now redirects to Google; session is picked up on return.
   };
-  const logout = () => {
-    clearToken();
-    window.localStorage.removeItem(EMAIL_KEY);
-    setTok(null);
-    setEmail(null);
+
+  const signOut = async () => {
+    await supabase.auth.signOut();
+    apply(null);
   };
 
   return (
-    <Ctx.Provider value={{ token, email, ready, login, register, logout }}>
+    <Ctx.Provider value={{ token, email, ready, signIn, signUp, signInWithGoogle, signOut }}>
       {children}
     </Ctx.Provider>
   );

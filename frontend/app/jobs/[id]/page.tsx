@@ -30,7 +30,7 @@ export default function JobPage() {
   const params = useParams<{ id: string }>();
   const id = params?.id;
   const { token, ready } = useAuth();
-  const { job, events, error, refresh } = useJobStream(id ?? "");
+  const { job, events, error, refresh } = useJobStream(id ?? "", token);
 
   if (ready && !token) {
     return (

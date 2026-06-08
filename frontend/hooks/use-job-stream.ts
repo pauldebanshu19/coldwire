@@ -1,15 +1,19 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { api, type Job, type SseEvent } from "@/lib/api";
 
 const TERMINAL = ["COMPLETED", "FAILED", "CANCELLED"];
 
-export function useJobStream(id: string) {
+/**
+ * Watches a job: authoritative status via polling + live progress via SSE.
+ * Gated on `token` so we never call the API before the Supabase session has
+ * loaded (empty bearer -> 401), and we re-subscribe when the token refreshes.
+ */
+export function useJobStream(id: string, token: string | null) {
   const [job, setJob] = useState<Job | null>(null);
   const [events, setEvents] = useState<SseEvent[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const seen = useRef(0);
 
   const refresh = async () => {
     try {
@@ -19,8 +23,9 @@ export function useJobStream(id: string) {
     }
   };
 
-  // Authoritative status via polling (until terminal).
+  // Poll status until terminal.
   useEffect(() => {
+    if (!id || !token) return;
     let stopped = false;
     let timer: ReturnType<typeof setTimeout>;
     const tick = async () => {
@@ -29,6 +34,7 @@ export function useJobStream(id: string) {
         const j = await api.getJob(id);
         if (stopped) return;
         setJob(j);
+        setError(null);
         if (!TERMINAL.includes(j.status)) timer = setTimeout(tick, 1500);
       } catch (e) {
         setError((e as Error).message);
@@ -36,21 +42,18 @@ export function useJobStream(id: string) {
       }
     };
     tick();
-    return () => {
-      stopped = true;
-      clearTimeout(timer);
-    };
-  }, [id]);
+    return () => { stopped = true; clearTimeout(timer); };
+  }, [id, token]);
 
-  // Live granular progress via SSE.
+  // Live SSE — rebuilt whenever the token changes (so it carries a fresh one).
   useEffect(() => {
+    if (!id || !token) return;
     const es = new EventSource(api.eventsUrl(id));
     es.onmessage = (m) => {
       try {
         const ev = JSON.parse(m.data) as SseEvent;
         if (ev.stage === "heartbeat") return;
         setEvents((prev) => [...prev, ev]);
-        seen.current += 1;
         if (ev.stage === "pipeline" && (ev.status === "done" || ev.status === "error")) {
           es.close();
         }
@@ -58,11 +61,9 @@ export function useJobStream(id: string) {
         /* ignore malformed frame */
       }
     };
-    es.onerror = () => {
-      // browser auto-reconnects; terminal close handled in onmessage
-    };
+    es.onerror = () => { /* browser auto-reconnects; terminal close handled above */ };
     return () => es.close();
-  }, [id]);
+  }, [id, token]);
 
   return { job, events, error, refresh };
 }

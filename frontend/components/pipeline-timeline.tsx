@@ -8,12 +8,12 @@ import { cn } from "@/lib/utils";
 const STAGE_COLOR: Record<string, string> = {
   ocean: "text-sky-400",
   prospeo: "text-violet-400",
-  eazyreach: "text-amber-400",
+  resolve: "text-amber-400",
   brevo: "text-primary",
   pipeline: "text-muted-foreground",
 };
 const STAGE_TAG: Record<string, string> = {
-  ocean: "OCEAN", prospeo: "PROSPEO", eazyreach: "RESOLVE", brevo: "BREVO", pipeline: "SYS",
+  ocean: "OCEAN", prospeo: "PROSPEO", resolve: "RESOLVE", brevo: "BREVO", pipeline: "SYS",
 };
 
 function StateDot({ state }: { state: StageState }) {
