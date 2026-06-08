@@ -4,8 +4,15 @@
 
 import { supabase } from "./supabase";
 
-export const API_URL =
-  process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") || "http://localhost:8000";
+function normalizeBase(raw?: string): string {
+  let base = (raw || "http://localhost:8000").trim().replace(/\/+$/, "");
+  // tolerate a missing scheme (e.g. "host.up.railway.app") so it isn't treated
+  // as a relative path and appended to the current origin.
+  if (base && !/^https?:\/\//i.test(base)) base = `https://${base}`;
+  return base;
+}
+
+export const API_URL = normalizeBase(process.env.NEXT_PUBLIC_API_URL);
 
 // Cached for synchronous needs (the SSE URL); kept in sync by the AuthProvider.
 let _bearer: string | null = null;
