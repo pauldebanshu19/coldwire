@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from sqlalchemy import select
+from sqlalchemy import delete as sa_delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.clients import build_clients
@@ -180,6 +180,19 @@ async def build_results(session: AsyncSession, job: Job) -> ResultsOut:
                      status=o.status, message_id=o.brevo_message_id, error=o.error)
            for o, c, addr in rows]
     return ResultsOut(job_id=job.id, status=job.status, stats=job.stats or {}, results=out)
+
+
+async def delete_job(session: AsyncSession, job_id: str) -> None:
+    """Hard-delete a job and all its rows, leaf-first (async-safe, no ORM cascade)."""
+    contact_ids = (await session.execute(
+        select(Contact.id).where(Contact.job_id == job_id))).scalars().all()
+    if contact_ids:
+        await session.execute(sa_delete(Email).where(Email.contact_id.in_(contact_ids)))
+    await session.execute(sa_delete(Outreach).where(Outreach.job_id == job_id))
+    await session.execute(sa_delete(Contact).where(Contact.job_id == job_id))
+    await session.execute(sa_delete(Company).where(Company.job_id == job_id))
+    await session.execute(sa_delete(Job).where(Job.id == job_id))
+    await session.commit()
 
 
 # ── Persistence helpers ───────────────────────────────────────────────

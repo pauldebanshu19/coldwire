@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Callable, Optional
 
 # on_event(stage, status, count, message)
-#   stage  ∈ ocean | prospeo | eazyreach | brevo | pipeline
+#   stage  ∈ ocean | prospeo | resolve | brevo | pipeline
 #   status ∈ start | progress | done | skip | error
 EventFn = Callable[[str, str, int, str], None]
 

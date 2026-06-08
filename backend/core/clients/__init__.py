@@ -1,6 +1,5 @@
 """Client factory: wires HTTP transport + rate limiter + cache, picks real
-vs mock providers, and routes email resolution to Eazyreach or (when no
-Eazyreach key is set) the Prospeo enrich-person fallback.
+vs mock providers. Email resolution (Stage 3) runs on Prospeo `enrich-person`.
 """
 
 from __future__ import annotations
@@ -11,14 +10,14 @@ from typing import AsyncIterator, Protocol
 
 import httpx
 
+from ..breaker import BreakerRegistry
 from ..cache import build_cache
 from ..config import Settings
 from ..http import ProviderHTTP
 from ..logging import get_logger
 from ..models import Company, Contact, Email
-from ..ratelimit import RateLimiterRegistry
+from ..ratelimit import RateLimiterRegistry, RedisRateLimiterRegistry
 from .brevo import BrevoClient
-from .eazyreach import EazyreachClient
 from .mock import MockBrevoClient, MockOceanClient, MockProspeoClient, MockResolver
 from .ocean import OceanClient
 from .prospeo import ProspeoClient
@@ -53,27 +52,25 @@ async def build_clients(settings: Settings) -> AsyncIterator[Clients]:
         )
         return
 
-    limiter = RateLimiterRegistry(
-        {p: settings.provider_rps(p) for p in ("ocean", "prospeo", "eazyreach", "brevo")}
-    )
-    cache = build_cache(settings.cache_enabled, settings.cache_dir)
+    rps = {p: settings.provider_rps(p) for p in ("ocean", "prospeo", "brevo")}
+    if settings.redis_url:
+        log.info("Using Redis-global rate limiter + cache")
+        limiter: object = RedisRateLimiterRegistry(settings.redis_url, rps)
+    else:
+        limiter = RateLimiterRegistry(rps)
+    cache = build_cache(settings.cache_enabled, settings.cache_dir, settings.redis_url)
+    breakers = BreakerRegistry()
 
     async with httpx.AsyncClient(timeout=settings.http_timeout) as client:
-        http = ProviderHTTP(client, limiter, cache, max_retries=settings.max_retries)
+        http = ProviderHTTP(client, limiter, cache, breakers=breakers,
+                            max_retries=settings.max_retries)
 
         ocean = OceanClient(http, settings)
         prospeo = ProspeoClient(http, settings)
         brevo = BrevoClient(http, settings)
 
-        if settings.eazyreach_api_key:
-            resolver: object = EazyreachClient(http, settings)
-            resolver_name = "eazyreach"
-        else:
-            log.warning("No EAZYREACH_API_KEY — resolving emails via Prospeo enrich-person")
-            resolver = prospeo  # ProspeoClient also implements resolve_email
-            resolver_name = "prospeo-enrich"
-
+        # Stage 3 resolves emails via Prospeo enrich-person (same client).
         yield Clients(
-            ocean=ocean, prospeo=prospeo, resolver=resolver, brevo=brevo,
-            resolver_name=resolver_name,
+            ocean=ocean, prospeo=prospeo, resolver=prospeo, brevo=brevo,
+            resolver_name="prospeo-enrich",
         )

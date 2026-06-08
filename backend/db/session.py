@@ -13,9 +13,21 @@ from .base import Base
 
 _settings = get_app_settings()
 
-_connect_args = {}
-if _settings.database_url.startswith("sqlite"):
-    _connect_args = {"check_same_thread": False}
+
+def _connect_args_for(url: str) -> dict:
+    if url.startswith("sqlite"):
+        return {"check_same_thread": False}
+    if "+asyncpg" in url:
+        # statement_cache_size=0 is required behind a transaction pooler
+        # (Supabase Supavisor / PgBouncer). Supabase requires TLS.
+        args: dict = {"statement_cache_size": 0}
+        if "supabase.co" in url or "supabase.com" in url or "pooler.supabase" in url:
+            args["ssl"] = "require"
+        return args
+    return {}
+
+
+_connect_args = _connect_args_for(_settings.database_url)
 
 # NullPool: don't reuse connections across event loops. Celery runs each task in
 # its own asyncio.run loop, and a pooled asyncpg connection bound to a prior

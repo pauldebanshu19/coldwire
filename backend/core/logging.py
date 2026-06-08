@@ -16,7 +16,7 @@ def setup_logging(level: str = "INFO") -> None:
     handler.setFormatter(
         logging.Formatter("%(asctime)s %(levelname)-7s %(name)s | %(message)s", "%H:%M:%S")
     )
-    root = logging.getLogger("conduit")
+    root = logging.getLogger("coldwire")
     root.setLevel(level.upper())
     root.addHandler(handler)
     root.propagate = False
@@ -24,7 +24,7 @@ def setup_logging(level: str = "INFO") -> None:
 
 
 def get_logger(name: str) -> logging.Logger:
-    return logging.getLogger(f"conduit.{name}")
+    return logging.getLogger(f"coldwire.{name}")
 
 
 def redact_email(addr: str | None) -> str:

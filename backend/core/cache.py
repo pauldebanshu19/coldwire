@@ -63,5 +63,37 @@ class FileCache(Cache):
             pass
 
 
-def build_cache(enabled: bool, directory: str) -> Cache:
+class RedisCache(Cache):
+    """Shared result cache across all workers (paid-call dedup is global)."""
+
+    def __init__(self, url: str) -> None:
+        import redis.asyncio as aioredis
+        self._r = aioredis.from_url(url, decode_responses=True)
+
+    @staticmethod
+    def _k(key: str) -> str:
+        return f"coldwire:cache:{key}"
+
+    async def get(self, key: str) -> Optional[Any]:
+        try:
+            raw = await self._r.get(self._k(key))
+        except Exception:  # noqa: BLE001 - cache must never break the run
+            return None
+        if raw is None:
+            return None
+        try:
+            return json.loads(raw)
+        except json.JSONDecodeError:
+            return None
+
+    async def set(self, key: str, value: Any, ttl: int) -> None:
+        try:
+            await self._r.set(self._k(key), json.dumps(value), ex=max(ttl, 1))
+        except (TypeError, Exception):  # noqa: BLE001
+            return None
+
+
+def build_cache(enabled: bool, directory: str, redis_url: str = "") -> Cache:
+    if redis_url:
+        return RedisCache(redis_url)
     return FileCache(directory) if enabled else NullCache()

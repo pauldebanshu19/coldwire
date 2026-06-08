@@ -23,13 +23,13 @@ from api.main import app  # noqa: E402,F401
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Run the Conduit backend API")
+    parser = argparse.ArgumentParser(description="Run the Coldwire backend API")
     parser.add_argument("--host", default=os.getenv("HOST", "0.0.0.0"))
     parser.add_argument("--port", type=int, default=int(os.getenv("PORT", "8000")))
     parser.add_argument("--reload", action="store_true", help="auto-reload (dev)")
     args = parser.parse_args()
 
-    print(f"→ Conduit API on http://localhost:{args.port}  (Swagger UI: /docs, health: /health)")
+    print(f"→ Coldwire API on http://localhost:{args.port}  (Swagger UI: /docs, health: /health)")
     uvicorn.run("api.main:app", host=args.host, port=args.port, reload=args.reload)
 
 

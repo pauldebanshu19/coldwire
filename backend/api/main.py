@@ -9,7 +9,6 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app_settings import get_app_settings
 from db.session import init_models
-from .routes_auth import router as auth_router
 from .routes_jobs import router as jobs_router
 
 
@@ -21,7 +20,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="Conduit API", version="0.2.0", lifespan=lifespan)
+app = FastAPI(title="Coldwire API", version="0.2.0", lifespan=lifespan)
 
 _settings = get_app_settings()
 _origins = [o.strip() for o in _settings.cors_origins.split(",") if o.strip()]
@@ -41,7 +40,6 @@ elif _settings.dev_mode:
 else:
     raise RuntimeError("CORS_ORIGINS must be set when DEV_MODE is false")
 
-app.include_router(auth_router)
 app.include_router(jobs_router)
 
 

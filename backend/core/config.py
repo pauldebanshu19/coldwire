@@ -17,13 +17,11 @@ class Settings(BaseSettings):
     # ── Provider credentials ──
     ocean_api_key: str = ""
     prospeo_api_key: str = ""
-    eazyreach_api_key: str = ""
     brevo_api_key: str = ""
 
     # ── Provider base URLs (overridable for the mock stub server) ──
     ocean_base_url: str = "https://api.ocean.io"
     prospeo_base_url: str = "https://api.prospeo.io"
-    eazyreach_base_url: str = "https://api.eazyreach.app"
     brevo_base_url: str = "https://api.brevo.com"
 
     # ── Brevo transport ──
@@ -32,10 +30,14 @@ class Settings(BaseSettings):
     brevo_smtp_port: int = 587
     brevo_smtp_login: str = ""
 
-    # ── Sender identity ──
-    sender_email: str = "outreach@debanshupaul.me"
-    sender_name: str = "Debanshu Paul"
+    # ── Sender identity (configure via env — must be a verified sender) ──
+    sender_email: str = ""
+    sender_name: str = "Coldwire"
     reply_to_email: str = ""
+
+    # Safety: when set, ALL outreach is redirected to this single address
+    # instead of the real prospects (safe demos / testing). Empty = real send.
+    test_recipient: str = ""
 
     # ── Pipeline tuning ──
     mock: bool = False
@@ -49,20 +51,22 @@ class Settings(BaseSettings):
     # Prospeo's limit is strict — keep these conservative; 429s are retried.
     ocean_rps: float = 2
     prospeo_rps: float = 1
-    eazyreach_rps: float = 1
     brevo_rps: float = 5
 
     # ── HTTP retry ──
     http_timeout: float = 30.0
     max_retries: int = 4
 
-    # ── Cache ──
+    # ── Cache / Redis ──
+    # When redis_url is set, the result cache and the rate-limit token buckets
+    # become Redis-backed and GLOBAL across all worker processes.
+    redis_url: str = ""
     cache_enabled: bool = True
     cache_dir: str = ".cache"
     cache_ttl_seconds: int = 86_400
 
     # ── Compliance ──
-    unsubscribe_base_url: str = "https://debanshupaul.me/unsubscribe"
+    unsubscribe_base_url: str = ""
 
     log_level: str = "INFO"
 

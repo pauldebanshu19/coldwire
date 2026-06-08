@@ -24,6 +24,14 @@ SENIORITY_FILTER = ["Founder/Owner", "C-Suite", "Partner", "Vice President", "He
 PAGE_SIZE = 25
 
 
+def _as_str(v) -> str | None:
+    """Coerce a provider value to a clean string, or None. Guards against lists
+    (e.g. an empty `departments: []`) being passed into string fields."""
+    if isinstance(v, str):
+        return v or None
+    return None
+
+
 class ProspeoClient:
     provider = "prospeo"
     name = "prospeo-enrich"  # when used as resolver
@@ -89,9 +97,9 @@ class ProspeoClient:
         seniority = department = None
         for job in person.get("job_history", []) or []:
             if isinstance(job, dict) and job.get("current"):
-                seniority = job.get("seniority")
+                seniority = _as_str(job.get("seniority"))
                 deps = job.get("departments")
-                department = deps[0] if isinstance(deps, list) and deps else deps
+                department = deps[0] if isinstance(deps, list) and deps else _as_str(deps)
                 break
         # search sometimes already returns the verified email object — capture it
         # so Stage 3 can skip a redundant (paid) enrich call.
@@ -101,7 +109,7 @@ class ProspeoClient:
             full_name=first(person, ("full_name", "name")),
             first_name=first(person, ("first_name", "firstname", "given_name")),
             last_name=first(person, ("last_name", "lastname", "family_name")),
-            title=first(person, ("current_job_title", "job_title", "title", "headline")),
+            title=_as_str(first(person, ("current_job_title", "job_title", "title", "headline"))),
             seniority=seniority,
             department=department,
             linkedin_url=li,

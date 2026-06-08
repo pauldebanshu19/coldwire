@@ -32,9 +32,11 @@ JOB_STATUSES = (
 
 class User(Base):
     __tablename__ = "users"
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
-    email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
-    password_hash: Mapped[str] = mapped_column(String(255))
+    # id mirrors the Supabase user id (sub). Auth lives in Supabase; this row
+    # exists only so jobs stay relationally scoped to a user.
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=_uuid)
+    email: Mapped[str] = mapped_column(String(255), index=True, default="")
+    password_hash: Mapped[str] = mapped_column(String(255), default="")  # unused (Supabase)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     jobs: Mapped[list["Job"]] = relationship(back_populates="user")

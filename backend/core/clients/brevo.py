@@ -44,6 +44,10 @@ class BrevoClient:
         text: str,
         unsubscribe_url: Optional[str] = None,
     ) -> str:
+        # Safety redirect: send everything to one controlled inbox when set.
+        if self._s.test_recipient:
+            subject = f"[demo → {to_name} <{to_email}>] {subject}"
+            to_email = self._s.test_recipient
         if self.transport == "smtp":
             mid = await self._send_smtp(to_email, to_name, subject, html, text, unsubscribe_url)
         else:
@@ -61,7 +65,7 @@ class BrevoClient:
             "subject": subject,
             "htmlContent": html,
             "textContent": text,
-            "tags": ["conduit-outreach"],
+            "tags": ["coldwire-outreach"],
         }
         if self._s.reply_to_email:
             body["replyTo"] = {"email": self._s.reply_to_email}

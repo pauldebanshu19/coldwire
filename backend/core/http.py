@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import random
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 import httpx
 
@@ -20,6 +20,9 @@ from .cache import Cache
 from .errors import AuthError, RetryableError, TerminalError
 from .logging import get_logger
 from .ratelimit import RateLimiterRegistry
+
+if TYPE_CHECKING:
+    from .breaker import BreakerRegistry
 
 log = get_logger("http")
 
@@ -42,6 +45,7 @@ class ProviderHTTP:
         limiter: RateLimiterRegistry,
         cache: Cache,
         *,
+        breakers: "BreakerRegistry | None" = None,
         max_retries: int = 4,
         base_backoff: float = 0.5,
         max_backoff: float = 30.0,
@@ -49,6 +53,7 @@ class ProviderHTTP:
         self._client = client
         self._limiter = limiter
         self._cache = cache
+        self._breakers = breakers
         self._max_retries = max_retries
         self._base_backoff = base_backoff
         self._max_backoff = max_backoff
@@ -78,6 +83,10 @@ class ProviderHTTP:
         return result
 
     async def _send_with_retry(self, provider, method, url, headers, json, params) -> Any:
+        breaker = self._breakers.get(provider) if self._breakers else None
+        if breaker:
+            await breaker.check()  # fast-fail (CircuitOpenError) if provider is down
+
         last_exc: Optional[Exception] = None
         for attempt in range(1, self._max_retries + 1):
             await self._limiter.acquire(provider)
@@ -91,6 +100,8 @@ class ProviderHTTP:
                 continue
 
             if resp.status_code < 300:
+                if breaker:
+                    await breaker.record_success()
                 if not resp.content:
                     return {}
                 try:
@@ -103,9 +114,13 @@ class ProviderHTTP:
                 last_exc = exc
                 await self._sleep_before_retry(attempt, exc.retry_after, str(exc))
                 continue
+            if breaker:
+                await breaker.record_failure()  # terminal failure counts toward the breaker
             raise exc  # terminal — stop now
 
         assert last_exc is not None
+        if breaker:
+            await breaker.record_failure()  # exhausted retries counts toward the breaker
         log.error("%s exhausted %d retries: %s", provider, self._max_retries, last_exc)
         raise last_exc
 

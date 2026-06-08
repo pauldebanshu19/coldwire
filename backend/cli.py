@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Conduit CLI — the gradeable core, run live.
+"""Coldwire CLI — the gradeable core, run live.
 
     python cli.py acme.com                 # real APIs, prompts before sending
     python cli.py acme.com --mock          # fake providers, zero credits
@@ -148,7 +148,7 @@ def main(argv: list[str]) -> int:
     console.print(Panel(
         f"[bold]seed[/bold] {seed}    [dim]mode[/dim] {'MOCK' if settings.mock else 'LIVE'}    "
         f"[dim]brevo[/dim] {settings.resolved_brevo_transport}",
-        title="Conduit — cold-outreach pipeline", border_style="blue",
+        title="Coldwire — cold-outreach pipeline", border_style="blue",
     ))
 
     result = asyncio.run(run_pipeline(

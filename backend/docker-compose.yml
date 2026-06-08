@@ -31,8 +31,9 @@ services:
       REDIS_URL: redis://redis:6379/0
       MOCK: ${MOCK:-false}
       AUTO_CREATE_TABLES: "true"
-      JWT_SECRET: ${JWT_SECRET:-change-me-in-prod-32bytes-minimum-secret}
-      CORS_ORIGINS: ${CORS_ORIGINS:-*}
+      # Supabase auth (SUPABASE_URL / SUPABASE_PUBLISHABLE_KEY) comes from .env.
+      CORS_ORIGINS: ${CORS_ORIGINS:-}   # empty + DEV_MODE -> wildcard w/o credentials
+      DEV_MODE: ${DEV_MODE:-true}
     depends_on:
       db: {condition: service_healthy}
       redis: {condition: service_healthy}

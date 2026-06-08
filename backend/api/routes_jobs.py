@@ -14,8 +14,8 @@ from .deps import get_current_user, get_session
 from .dispatch import dispatch_run_job, dispatch_send
 from .events import format_sse, get_bus
 from .schemas import JobIn, JobOut, ResultsOut, ReviewOut
-from .security import decode_token
-from .service import build_results, build_review, create_job, _set_status
+from .supabase_auth import verify_token
+from .service import build_results, build_review, create_job, delete_job as delete_job_service, _set_status
 
 router = APIRouter(prefix="/api/jobs", tags=["jobs"])
 
@@ -104,16 +104,23 @@ async def results(job_id: str, user: User = Depends(get_current_user),
     return await build_results(session, await _owned(session, user, job_id))
 
 
+@router.delete("/{job_id}", status_code=204)
+async def delete_job(job_id: str, user: User = Depends(get_current_user),
+                     session: AsyncSession = Depends(get_session)) -> None:
+    job = await _owned(session, user, job_id)  # ownership check (404 if not yours)
+    await delete_job_service(session, job.id)
+
+
 @router.get("/{job_id}/events")
 async def events(job_id: str, token: str = Query(default="")):
-    """SSE progress stream. EventSource can't set headers, so the JWT comes as
-    a `?token=` query param."""
-    user_id = decode_token(token)
-    if not user_id:
+    """SSE progress stream. EventSource can't set headers, so the Supabase
+    access token comes as a `?token=` query param."""
+    info = await verify_token(token)
+    if not info:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid or missing token")
     async with AsyncSessionLocal() as session:
         job = await session.get(Job, job_id)
-        if job is None or job.user_id != user_id:
+        if job is None or job.user_id != info["id"]:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Job not found")
 
     bus = get_bus()
