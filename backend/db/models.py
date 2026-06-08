@@ -56,6 +56,7 @@ class Job(Base):
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     reply_to: Mapped[str | None] = mapped_column(String(255), nullable=True)      # per-run Reply-To
     sender_name: Mapped[str | None] = mapped_column(String(255), nullable=True)   # per-run From display name
+    send_to: Mapped[str | None] = mapped_column(String(255), nullable=True)       # per-run delivery override (deliver all here)
 
     __table_args__ = (
         UniqueConstraint("user_id", "idempotency_key", name="uq_job_user_idem"),

@@ -22,20 +22,26 @@ export function ReviewGate({ jobId, onChange }: { jobId: string; onChange: () =>
   const [busy, setBusy] = useState<"" | "approve" | "cancel">("");
   const [senderName, setSenderName] = useState("");
   const [replyTo, setReplyTo] = useState("");
+  const [sendTo, setSendTo] = useState("");
 
   useEffect(() => {
     api.review(jobId).then(setReview).catch((e) => toast.error((e as Error).message));
   }, [jobId]);
 
   const approve = async () => {
-    if (replyTo.trim() && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(replyTo.trim())) {
+    const email = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+    if (replyTo.trim() && !email.test(replyTo.trim())) {
       toast.error("Reply-to must be a valid email");
+      return;
+    }
+    if (sendTo.trim() && !email.test(sendTo.trim())) {
+      toast.error("Send-to must be a valid email");
       return;
     }
     setBusy("approve");
     try {
-      await api.approve(jobId, { sender_name: senderName, reply_to: replyTo });
-      toast.success("Approved — firing outreach");
+      await api.approve(jobId, { sender_name: senderName, reply_to: replyTo, send_to: sendTo });
+      toast.success(sendTo.trim() ? `Sending all to ${sendTo.trim()}` : "Approved — firing outreach");
       onChange();
     } catch (e) {
       toast.error((e as Error).message);
@@ -111,8 +117,22 @@ export function ReviewGate({ jobId, onChange }: { jobId: string; onChange: () =>
                 />
               </div>
             </div>
+
+            <div className="mt-3 space-y-1.5">
+              <label className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+                Send all to (test inbox)
+              </label>
+              <input
+                type="email"
+                value={sendTo}
+                onChange={(e) => setSendTo(e.target.value)}
+                placeholder="optional — deliver every email to this inbox instead of the prospects"
+                className="h-10 w-full rounded-md border border-input bg-background/70 px-3 font-mono text-sm outline-none focus:border-primary/60 focus:ring-2 focus:ring-ring placeholder:text-muted-foreground/50"
+              />
+            </div>
             <p className="mt-1.5 font-mono text-[10px] text-muted-foreground/70">
-              From stays your verified sender; only the display name + reply-to change.
+              From stays your verified sender; display name + reply-to change. Leave “send all to”
+              blank to mail the real prospects.
             </p>
 
             <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">

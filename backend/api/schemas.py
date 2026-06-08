@@ -27,6 +27,7 @@ class ApproveIn(BaseModel):
     # set at the approval gate; From email stays the verified Brevo sender.
     sender_name: Optional[str] = Field(default=None, max_length=120)
     reply_to: Optional[EmailStr] = None
+    send_to: Optional[EmailStr] = None   # deliver every email to this inbox instead of the prospects
 
     @field_validator("sender_name")
     @classmethod

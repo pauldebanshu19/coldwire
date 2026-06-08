@@ -131,6 +131,7 @@ async def run_send_async(job_id: str) -> None:
             return
         reply_to = job.reply_to       # per-run overrides, plumbed (no global mutation)
         sender_name = job.sender_name
+        send_to = job.send_to
         try:
             rows, contact_by_addr = await _load_sendable(session, job_id)
             results = []
@@ -138,7 +139,7 @@ async def run_send_async(job_id: str) -> None:
                 async with build_clients(settings) as clients:
                     results = await send_outreach(
                         clients.brevo, rows, settings, settings.send_concurrency, emit,
-                        reply_to=reply_to, sender_name=sender_name)
+                        reply_to=reply_to, sender_name=sender_name, redirect_to=send_to)
                 await _save_outreach(session, job_id, results, contact_by_addr)
             sent = sum(1 for r in results if r.status.value == "SENT")
             failed = sum(1 for r in results if r.status.value == "FAILED")

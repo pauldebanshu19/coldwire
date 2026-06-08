@@ -138,12 +138,13 @@ export const api = {
   listJobs: () => request<Job[]>("/api/jobs"),
   getJob: (id: string) => request<Job>(`/api/jobs/${id}`),
   review: (id: string) => request<Review>(`/api/jobs/${id}/review`),
-  approve: (id: string, opts?: { sender_name?: string; reply_to?: string }) =>
+  approve: (id: string, opts?: { sender_name?: string; reply_to?: string; send_to?: string }) =>
     request<Job>(`/api/jobs/${id}/approve`, {
       method: "POST",
       body: JSON.stringify({
         sender_name: opts?.sender_name?.trim() || undefined,
         reply_to: opts?.reply_to?.trim() || undefined,
+        send_to: opts?.send_to?.trim() || undefined,
       }),
     }),
   cancel: (id: string) => request<Job>(`/api/jobs/${id}/cancel`, { method: "POST" }),

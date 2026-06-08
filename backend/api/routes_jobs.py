@@ -83,11 +83,13 @@ async def approve(job_id: str, body: ApproveIn | None = None,
     if job.status != "AWAITING_APPROVAL":
         raise HTTPException(status.HTTP_409_CONFLICT, f"Cannot approve from {job.status}")
     from .service import _now
-    if body:  # per-run sender name / reply-to set at the gate
+    if body:  # per-run send options set at the gate
         if body.sender_name:
             job.sender_name = body.sender_name.strip() or None
         if body.reply_to:
             job.reply_to = str(body.reply_to)
+        if body.send_to:
+            job.send_to = str(body.send_to)
     job.approved_at = _now()
     await _set_status(session, job, "SENDING", get_bus())
     dispatch_send(job.id)
