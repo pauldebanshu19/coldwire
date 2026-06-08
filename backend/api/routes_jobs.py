@@ -13,7 +13,7 @@ from db.session import AsyncSessionLocal
 from .deps import get_current_user, get_session
 from .dispatch import dispatch_run_job, dispatch_send
 from .events import format_sse, get_bus
-from .schemas import JobIn, JobOut, ResultsOut, ReviewOut
+from .schemas import ApproveIn, JobIn, JobOut, ResultsOut, ReviewOut
 from .supabase_auth import verify_token
 from .service import build_results, build_review, create_job, delete_job as delete_job_service, _set_status
 
@@ -46,7 +46,7 @@ async def submit_job(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> JobOut:
-    job, created = await create_job(session, user, body.seed_domain, idempotency_key)
+    job, created = await create_job(session, user, body.seed_domain, idempotency_key, body.reply_to)
     if created:
         dispatch_run_job(job.id)
     return _to_out(job)
@@ -76,12 +76,18 @@ async def review(job_id: str, user: User = Depends(get_current_user),
 
 
 @router.post("/{job_id}/approve", response_model=JobOut)
-async def approve(job_id: str, user: User = Depends(get_current_user),
+async def approve(job_id: str, body: ApproveIn | None = None,
+                  user: User = Depends(get_current_user),
                   session: AsyncSession = Depends(get_session)) -> JobOut:
     job = await _owned(session, user, job_id)
     if job.status != "AWAITING_APPROVAL":
         raise HTTPException(status.HTTP_409_CONFLICT, f"Cannot approve from {job.status}")
     from .service import _now
+    if body:  # per-run sender name / reply-to set at the gate
+        if body.sender_name:
+            job.sender_name = body.sender_name.strip() or None
+        if body.reply_to:
+            job.reply_to = str(body.reply_to)
     job.approved_at = _now()
     await _set_status(session, job, "SENDING", get_bus())
     dispatch_send(job.id)

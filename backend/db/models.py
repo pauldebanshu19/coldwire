@@ -54,6 +54,8 @@ class Job(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    reply_to: Mapped[str | None] = mapped_column(String(255), nullable=True)      # per-run Reply-To
+    sender_name: Mapped[str | None] = mapped_column(String(255), nullable=True)   # per-run From display name
 
     __table_args__ = (
         UniqueConstraint("user_id", "idempotency_key", name="uq_job_user_idem"),

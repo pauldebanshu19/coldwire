@@ -93,7 +93,7 @@ class MockBrevoClient:
     def __init__(self, settings: Settings) -> None:
         self._s = settings
 
-    async def send(self, *, to_email, to_name, subject, html, text, unsubscribe_url=None) -> str:
+    async def send(self, *, to_email, to_name, subject, html, text, unsubscribe_url=None, reply_to=None, sender_name=None) -> str:
         await asyncio.sleep(0.03)
         mid = make_msgid().strip("<>")
         log.info("Brevo[mock]: would send to %s (msg %s)", redact_email(to_email), mid)

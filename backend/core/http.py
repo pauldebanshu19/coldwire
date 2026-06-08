@@ -119,8 +119,11 @@ class ProviderHTTP:
             raise exc  # terminal — stop now
 
         assert last_exc is not None
-        if breaker:
-            await breaker.record_failure()  # exhausted retries counts toward the breaker
+        # A 429 (rate limit) is transient — it's handled by the token bucket +
+        # retries, NOT a provider outage. Don't let it trip the breaker, or a
+        # strict-rate-limited provider would pause the whole stage.
+        if breaker and getattr(last_exc, "status", None) != 429:
+            await breaker.record_failure()
         log.error("%s exhausted %d retries: %s", provider, self._max_retries, last_exc)
         raise last_exc
 

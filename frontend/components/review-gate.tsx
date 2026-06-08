@@ -20,15 +20,21 @@ function Tile({ label, value, accent }: { label: string; value: number; accent?:
 export function ReviewGate({ jobId, onChange }: { jobId: string; onChange: () => void }) {
   const [review, setReview] = useState<Review | null>(null);
   const [busy, setBusy] = useState<"" | "approve" | "cancel">("");
+  const [senderName, setSenderName] = useState("");
+  const [replyTo, setReplyTo] = useState("");
 
   useEffect(() => {
     api.review(jobId).then(setReview).catch((e) => toast.error((e as Error).message));
   }, [jobId]);
 
   const approve = async () => {
+    if (replyTo.trim() && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(replyTo.trim())) {
+      toast.error("Reply-to must be a valid email");
+      return;
+    }
     setBusy("approve");
     try {
-      await api.approve(jobId);
+      await api.approve(jobId, { sender_name: senderName, reply_to: replyTo });
       toast.success("Approved — firing outreach");
       onChange();
     } catch (e) {
@@ -80,7 +86,36 @@ export function ReviewGate({ jobId, onChange }: { jobId: string; onChange: () =>
               </div>
             )}
 
-            <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center">
+            <div className="mt-5 grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <label className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+                  Sender name
+                </label>
+                <input
+                  value={senderName}
+                  onChange={(e) => setSenderName(e.target.value)}
+                  placeholder="Coldwire"
+                  className="h-10 w-full rounded-md border border-input bg-background/70 px-3 font-mono text-sm outline-none focus:border-primary/60 focus:ring-2 focus:ring-ring placeholder:text-muted-foreground/50"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+                  Reply-to email
+                </label>
+                <input
+                  type="email"
+                  value={replyTo}
+                  onChange={(e) => setReplyTo(e.target.value)}
+                  placeholder="replies@yourdomain.com"
+                  className="h-10 w-full rounded-md border border-input bg-background/70 px-3 font-mono text-sm outline-none focus:border-primary/60 focus:ring-2 focus:ring-ring placeholder:text-muted-foreground/50"
+                />
+              </div>
+            </div>
+            <p className="mt-1.5 font-mono text-[10px] text-muted-foreground/70">
+              From stays your verified sender; only the display name + reply-to change.
+            </p>
+
+            <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
               <Button
                 onClick={approve}
                 disabled={busy !== "" || review.deliverable === 0}

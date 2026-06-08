@@ -10,6 +10,7 @@ carries a List-Unsubscribe header for CAN-SPAM / GDPR compliance.
 
 from __future__ import annotations
 
+from email.headerregistry import Address
 from email.message import EmailMessage
 from email.utils import make_msgid
 from typing import Optional
@@ -43,32 +44,39 @@ class BrevoClient:
         html: str,
         text: str,
         unsubscribe_url: Optional[str] = None,
+        reply_to: Optional[str] = None,
+        sender_name: Optional[str] = None,
     ) -> str:
+        reply_to = reply_to or self._s.reply_to_email or None
+        sender_name = sender_name or self._s.sender_name or "Coldwire"
         # Safety redirect: send everything to one controlled inbox when set.
         if self._s.test_recipient:
             subject = f"[demo → {to_name} <{to_email}>] {subject}"
             to_email = self._s.test_recipient
         if self.transport == "smtp":
-            mid = await self._send_smtp(to_email, to_name, subject, html, text, unsubscribe_url)
+            mid = await self._send_smtp(to_email, to_name, subject, html, text,
+                                        unsubscribe_url, reply_to, sender_name)
         else:
-            mid = await self._send_rest(to_email, to_name, subject, html, text, unsubscribe_url)
+            mid = await self._send_rest(to_email, to_name, subject, html, text,
+                                        unsubscribe_url, reply_to, sender_name)
         log.info("Brevo[%s] sent to %s (msg %s)", self.transport, redact_email(to_email), mid)
         return mid
 
     # ── REST ─────────────────────────────────────────────────────────
-    async def _send_rest(self, to_email, to_name, subject, html, text, unsub) -> str:
+    async def _send_rest(self, to_email, to_name, subject, html, text, unsub,
+                         reply_to=None, sender_name=None) -> str:
         headers = {"api-key": self._s.brevo_api_key, "Content-Type": "application/json",
                    "accept": "application/json"}
         body: dict = {
-            "sender": {"name": self._s.sender_name, "email": self._s.sender_email},
+            "sender": {"name": sender_name or self._s.sender_name, "email": self._s.sender_email},
             "to": [{"email": to_email, "name": to_name}],
             "subject": subject,
             "htmlContent": html,
             "textContent": text,
             "tags": ["coldwire-outreach"],
         }
-        if self._s.reply_to_email:
-            body["replyTo"] = {"email": self._s.reply_to_email}
+        if reply_to:
+            body["replyTo"] = {"email": reply_to}
         if unsub:
             body["headers"] = {
                 "List-Unsubscribe": f"<{unsub}>",
@@ -80,19 +88,23 @@ class BrevoClient:
         return str(first(payload, ("messageId", "message_id", "id"), "")) or "sent"
 
     # ── SMTP relay ───────────────────────────────────────────────────
-    async def _send_smtp(self, to_email, to_name, subject, html, text, unsub) -> str:
+    async def _send_smtp(self, to_email, to_name, subject, html, text, unsub,
+                         reply_to=None, sender_name=None) -> str:
         login = self._s.brevo_smtp_login or self._s.sender_email
         if not login:
             raise ConfigError("BREVO_SMTP_LOGIN (Brevo account email) required for smtp transport")
 
         msg = EmailMessage()
-        msg["From"] = f"{self._s.sender_name} <{self._s.sender_email}>"
+        # Address() encodes the display name and refuses embedded newlines
+        # (defense-in-depth against header injection via sender_name).
+        msg["From"] = Address(display_name=sender_name or self._s.sender_name,
+                              addr_spec=self._s.sender_email)
         msg["To"] = f"{to_name} <{to_email}>" if to_name else to_email
         msg["Subject"] = subject
         msg_id = make_msgid()
         msg["Message-ID"] = msg_id
-        if self._s.reply_to_email:
-            msg["Reply-To"] = self._s.reply_to_email
+        if reply_to:
+            msg["Reply-To"] = reply_to
         if unsub:
             msg["List-Unsubscribe"] = f"<{unsub}>"
             msg["List-Unsubscribe-Post"] = "List-Unsubscribe=One-Click"

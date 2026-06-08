@@ -68,7 +68,7 @@ async def _set_status(session: AsyncSession, job: Job, status: str, bus, *,
 
 # ── Job creation / queries ───────────────────────────────────────────
 async def create_job(session: AsyncSession, user: User, seed_domain: str,
-                     idem_key: str | None) -> tuple[Job, bool]:
+                     idem_key: str | None, reply_to: str | None = None) -> tuple[Job, bool]:
     if idem_key:
         existing = (await session.execute(
             select(Job).where(Job.user_id == user.id, Job.idempotency_key == idem_key)
@@ -76,7 +76,7 @@ async def create_job(session: AsyncSession, user: User, seed_domain: str,
         if existing:
             return existing, False
     job = Job(user_id=user.id, seed_domain=normalize_domain(seed_domain),
-              idempotency_key=idem_key, status="QUEUED", stats={})
+              idempotency_key=idem_key, status="QUEUED", stats={}, reply_to=reply_to)
     session.add(job)
     await session.commit()
     return job, True
@@ -129,13 +129,16 @@ async def run_send_async(job_id: str) -> None:
         job = await session.get(Job, job_id)
         if job is None or job.status != "SENDING":
             return
+        reply_to = job.reply_to       # per-run overrides, plumbed (no global mutation)
+        sender_name = job.sender_name
         try:
             rows, contact_by_addr = await _load_sendable(session, job_id)
             results = []
             if rows:
                 async with build_clients(settings) as clients:
                     results = await send_outreach(
-                        clients.brevo, rows, settings, settings.send_concurrency, emit)
+                        clients.brevo, rows, settings, settings.send_concurrency, emit,
+                        reply_to=reply_to, sender_name=sender_name)
                 await _save_outreach(session, job_id, results, contact_by_addr)
             sent = sum(1 for r in results if r.status.value == "SENT")
             failed = sum(1 for r in results if r.status.value == "FAILED")

@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
 
 class RegisterIn(BaseModel):
@@ -20,6 +20,22 @@ class TokenOut(BaseModel):
 
 class JobIn(BaseModel):
     seed_domain: str = Field(min_length=3, max_length=255)
+    reply_to: Optional[EmailStr] = None   # where replies go; From stays the verified sender
+
+
+class ApproveIn(BaseModel):
+    # set at the approval gate; From email stays the verified Brevo sender.
+    sender_name: Optional[str] = Field(default=None, max_length=120)
+    reply_to: Optional[EmailStr] = None
+
+    @field_validator("sender_name")
+    @classmethod
+    def _no_header_injection(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        if any(ch in v for ch in ("\r", "\n", "\x00")):
+            raise ValueError("sender_name must not contain control characters")
+        return v.strip() or None
 
 
 class JobOut(BaseModel):

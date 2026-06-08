@@ -41,7 +41,12 @@ async def send_outreach(
     concurrency: int = 3,
     on_event: Optional[EventFn] = None,
     suppression: Optional[set[str]] = None,
+    reply_to: Optional[str] = None,
+    sender_name: Optional[str] = None,
 ) -> list[SendResult]:
+    # per-run overrides, else the configured defaults — never mutate settings
+    reply = reply_to or settings.reply_to_email or None
+    sname = sender_name or settings.sender_name or None
     suppression = {s.lower() for s in (suppression or set())}
     targets = sendable_contacts(contacts)
     skipped = [c for c in contacts if c not in targets]
@@ -73,6 +78,7 @@ async def send_outreach(
                     to_email=addr, to_name=contact.display_name,
                     subject=subject, html=html, text=text,
                     unsubscribe_url=unsubscribe_url(settings, addr),
+                    reply_to=reply, sender_name=sname,
                 )
             except ProviderError as exc:
                 log.error("send failed for %s: %s", redact_email(addr), exc)

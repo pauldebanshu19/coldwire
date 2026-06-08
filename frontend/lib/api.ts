@@ -130,12 +130,22 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 
 // ── Endpoints ────────────────────────────────────────────────────────
 export const api = {
-  createJob: (seed_domain: string) =>
-    request<Job>("/api/jobs", { method: "POST", body: JSON.stringify({ seed_domain }) }),
+  createJob: (seed_domain: string, reply_to?: string) =>
+    request<Job>("/api/jobs", {
+      method: "POST",
+      body: JSON.stringify({ seed_domain, reply_to: reply_to?.trim() || undefined }),
+    }),
   listJobs: () => request<Job[]>("/api/jobs"),
   getJob: (id: string) => request<Job>(`/api/jobs/${id}`),
   review: (id: string) => request<Review>(`/api/jobs/${id}/review`),
-  approve: (id: string) => request<Job>(`/api/jobs/${id}/approve`, { method: "POST" }),
+  approve: (id: string, opts?: { sender_name?: string; reply_to?: string }) =>
+    request<Job>(`/api/jobs/${id}/approve`, {
+      method: "POST",
+      body: JSON.stringify({
+        sender_name: opts?.sender_name?.trim() || undefined,
+        reply_to: opts?.reply_to?.trim() || undefined,
+      }),
+    }),
   cancel: (id: string) => request<Job>(`/api/jobs/${id}/cancel`, { method: "POST" }),
   results: (id: string) => request<Results>(`/api/jobs/${id}/results`),
   deleteJob: (id: string) => request<void>(`/api/jobs/${id}`, { method: "DELETE" }),
