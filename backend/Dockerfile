@@ -14,5 +14,6 @@ COPY . .
 
 EXPOSE 8000
 
-# default = API; the worker service overrides `command`
-CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# default = API; the worker service overrides `command`.
+# Shell form so $PORT (injected by Railway/Render/Heroku) expands; falls back to 8000 locally.
+CMD uvicorn api.main:app --host 0.0.0.0 --port ${PORT:-8000}
