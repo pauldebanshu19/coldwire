@@ -144,21 +144,3 @@ backend verifies the access token against Supabase and scopes jobs per user.
 | Cache / rate-limit / events | Redis (Streams for SSE) |
 | Frontend | Next.js 16, React 19, TypeScript, Tailwind v4, shadcn UI |
 | Containers | Docker + docker-compose (Postgres · Redis · API · worker) |
-
----
-
-## Demo & safety
-
-- For a credit-free run: `MOCK=true`.
-- For a real run on camera: re-use a domain you've already processed (e.g.
-  `stripe.com`) — its results are **cached**, so it resolves fast with no extra
-  credits or rate-limit waits.
-- `TEST_RECIPIENT` in `backend/.env` redirects **all** outreach to one inbox you
-  control (each send still counts against the provider's daily quota).
-- See [`script.md`](script.md) for a scene-by-scene demo-video script.
-
-## More
-
-- Backend details, CLI, API, real provider API notes → [`backend/README.md`](backend/README.md)
-- Frontend screens, routes, design → [`frontend/README.md`](frontend/README.md)
-- Full spec → [`PRD.md`](PRD.md)
