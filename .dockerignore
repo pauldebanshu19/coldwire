@@ -1,0 +1,13 @@
+# Keep the repo-root build context tiny — exclude the frontend + junk.
+frontend/
+**/node_modules/
+.venv/
+backend/.venv/
+**/__pycache__/
+**/*.pyc
+**/*.db
+**/.cache/
+.git/
+*.log
+**/.pytest_cache/
+.next/
